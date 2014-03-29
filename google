@@ -1,0 +1,62 @@
+#!/usr/bin/python
+'''
+This python script enables the user to query the Google Search API through the 
+command line. Only the top 4 results are displayed (title+content)
+
+Usage:
+	google how to use Google Search API --> one-time search
+	google	--> interactive mode with history
+'''
+import os
+import sys
+import urllib
+import json
+import re
+if not os.name=='nt':
+	import readline #enables arrow keys and history
+
+def search(query):
+	f = urllib.urlopen("http://ajax.googleapis.com/ajax/services/search/web?v=1.0&q="+urllib.quote_plus(query))
+	resp = f.read()
+	respArray = json.loads(resp)['responseData']['results']
+	if len(respArray)==0:
+		print("No results returned")
+	else:
+		for a in respArray:
+			t=a['titleNoFormatting']
+			t=re.sub("<\S+?>",'', \
+			re.sub('&#34','"', \
+			re.sub('&quot','"', \
+			re.sub('&#39',"'", \
+			re.sub('&apos',"'", \
+			re.sub(";",'', \
+			t))))))
+			print(t)
+			#print(a['url'])
+			l=a['content']
+			l=re.sub("<\S+?>",'', \
+			re.sub('&#34','"', \
+			re.sub('&quot','"', \
+			re.sub('&#39',"'", \
+			re.sub('&apos',"'", \
+			re.sub(";",'', \
+			re.sub("\n",'\n\t', \
+			l)))))))
+			print('\t'+l)
+			print('\n')
+
+if len(sys.argv)>1:
+	query=''
+	for i in range(1,len(sys.argv)):
+		query=query+sys.argv[i]+' '
+	search(query)
+else:
+	while True:
+		try:
+			l = raw_input(">>")
+			if not l.strip():
+				continue
+			search(l)
+		except:
+			print('\n')
+			break

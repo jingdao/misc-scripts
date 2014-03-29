@@ -1,0 +1,78 @@
+#!/bin/bash
+usage="\nUsage:\n    cipher enc/dec source destination\n"
+if [ "$1" != "enc" ] && [ "$1" != "dec" ]
+then
+	echo -e $usage
+	exit 0
+fi
+if [ -z $2 ] || (! [ -d $2 ] && ! [ -f $2 ] )
+then
+	echo "You must enter a valid source file/directory"; 
+	exit 0
+fi
+if [ -z $3 ] || ! [ -w $3 ] 
+then
+	echo "You must enter a writable destination directory"; 
+	exit 0
+fi
+if ! [ -d $3 ] && [ -n $(mkdir $3) ]
+then
+	echo "You must enter a writable destination directory"; 
+	exit 0
+fi
+if [ -f $2 ]
+then
+	if [ "${3:(-1)}" == "/" ]
+	then
+		dest=$3
+	else
+		dest=$3/
+	fi
+	if [ "$1" == "enc" ]
+	then
+		echo "encoding file ..."
+		outfile=`echo $2 | openssl enc -base64 -salt -aes-256-cbc -pass file:pw.txt | tr '/' '_'`
+		outfile=$dest$outfile
+		cat $2 | openssl enc -base64 -salt -aes-256-cbc -pass file:pw.txt | tr '/' '_' > $outfile
+		echo "generated encoded file: $outfile"
+	elif [ "$1" == "dec" ]
+	then
+		echo "decoding file ..."
+		fn=`basename $2`
+		outfile=`echo $fn | tr '_' '/' | openssl enc -base64 -d -aes-256-cbc -pass file:pw.txt`
+		if [ "$outfile" == "cipher.tar" ]
+		then
+			outfile=$dest$outfile
+			cat $2 | tr '_' '/' | openssl enc -base64 -d -aes-256-cbc -pass file:pw.txt > $outfile
+			tar xf $outfile
+			rm $outfile
+			echo "generated decoded directory in : $dest"
+		else
+			outfile=$dest$outfile
+			cat $2 | tr '_' '/' | openssl enc -base64 -d -aes-256-cbc -pass file:pw.txt > $outfile
+			echo "generated decoded file: $outfile"
+		fi
+	fi
+elif [ -d $2 ]
+then
+	if [ "$1" == "enc" ]
+	then
+		if [ "${3:(-1)}" == "/" ]
+		then
+			dest=$3
+		else
+			dest=$3/
+		fi
+		echo "archiving and encoding directory ..."
+		tar cf cipher.tar $2
+		outfile=`echo cipher.tar | openssl enc -base64 -salt -aes-256-cbc -pass file:pw.txt | tr '/' '_'`
+		outfile=$dest$outfile
+		cat cipher.tar | openssl enc -base64 -salt -aes-256-cbc -pass file:pw.txt | tr '/' '_' > $outfile
+		rm cipher.tar
+		echo "generated encoded file: $outfile"
+	elif [ "$1" == "dec" ]
+	then
+		echo "dec option is not valid for a directory"
+	fi 
+fi
+
