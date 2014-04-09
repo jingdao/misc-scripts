@@ -13,9 +13,10 @@ wik
 ---
 This python script enables the user to query the MediaWiki API through the 
 command line. The search returns (in order of preference) :
--a matching page title
--automatic redirect to an existing page
--first result from a Search API query
+
+- a matching page title
+- automatic redirect to an existing page
+- first result from a Search API query
 
 	Usage:
 		wik media wiki --> one-time search
