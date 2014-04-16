@@ -1,0 +1,128 @@
+#!/bin/bash
+#	Chen Jing Dao chenjingdao@gmail.com, 14 April 2014
+#
+#Concept
+#	wrapper around the dd command with progress bar
+#	parted command is used to determine end of partition
+#	(avoids copying unused space) 
+#	/sys/class/block/ folder is used to query block device IO
+#	/proc/ folder is used to check dd process status
+#
+#Acknowledgments
+#	Slick Progress Bar by: Ian Brown (ijbrown@hotmail.com)
+#		(all the code for drawing the progress bar)
+#	Various linux/bash references:
+#		http://www.thegeekstuff.com/2013/06/cut-command-examples/
+#		http://tldp.org/LDP/abs/html/index.html
+#		http://linuxpoison.blogspot.com.au/
+
+if [[ $EUID -ne 0 ]]; then
+	echo "This script must be run as root"
+	exit 1
+fi
+if (! [ -f "$1" ] && ! [ -b "$1" ] ) || (! [ -b "$2" ] && ! [ -f "$2" ] && ! touch $2); then
+	echo "Usage: diskwrite source destination"
+	echo "           (source and destination must be regular files or block device)"
+	exit 1
+fi
+PUT(){ echo -en "\033[${1};${2}H";}  
+DRAW(){ echo -en "\033(0";}         
+WRITE(){ echo -en "\033(B";}  
+HIDECURSOR(){ echo -en "\033[?25l";} 
+NORM(){ echo -en "\033[?12l\033[?25h";}
+function showBar {
+        percDone=$(echo 'scale=2;'$1/$2*100 | bc)
+        halfDone=$(echo $percDone/2 | bc) 
+        barLen=$(echo ${percDone%'.00'})
+        halfDone=`expr $halfDone + 6`
+        tput bold
+        #Print time elapsed, percentage, bytes written and average write speed
+        PUT 7 10; printf "%3sm%2ss %4s%% %10s written %10s" $(($3/60)) $(($3%60)) $barLen $4 $5
+        PUT 5 $halfDone;  echo -e "\033[7m \033[0m" #Draw the bar
+        tput sgr0
+        }
+clear
+HIDECURSOR
+echo -e ""                                           
+echo -e ""                                          
+DRAW    #magic starts here - must use caps in draw mode                                              
+echo -e "          PLEASE WAIT WHILE SCRIPT IS IN PROGRESS"
+echo -e "    lqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqk"  
+echo -e "    x                                                   x" 
+echo -e "    mqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqj"
+WRITE             
+T="$(date +%s)"
+#get last line of partition information from the "parted" command
+sectorInfo=`parted -s -m $1 unit s print | tail -1`
+if [ "${sectorInfo:0:5}" == "Error" ]; then
+	echo "Source file/device does not contain a valid disk image"
+	exit 1
+fi
+if [ -b $2 ]; then 
+	blockStatFile="/sys/class/block/${2:4}/stat"	
+	if ! [ -f "$blockStatFile" ]; then
+		echo "Destination is not a regular block device"
+		exit 1
+	fi
+	initialSectors=$(cat $blockStatFile | cut -c54-62)
+fi
+numSectors=`echo $sectorInfo | cut -d: -f3` #parse sector info to get end sector 
+numSectors=$((${numSectors%?}+1)) #remove trailing 's' character and add 1
+bytesTotal=$(($numSectors*512)) #each sector is 512 bytes
+numBlocks=$(($bytesTotal/1048576+1)) #divide into 1M blocks
+dd if=$1 of=$2 bs=1M count=$numBlocks &>/dev/null &
+#loop each 0.5 seconds while the background process is still running
+while [ -d "/proc/$!" ]; do
+	duration="$(($(date +%s)-T))"
+	if [ -f $2 ]; then
+		bytesWritten=$(stat -c%s "$2")
+	else
+		currentSectors=$(cat $blockStatFile | cut -c54-62)
+		bytesWritten=$((($currentSectors-$initialSectors)*512))
+	fi
+	if [ "$bytesWritten" -ge "1000000000" ]; then
+		bytesWrittenRepr=`echo "scale=2; $bytesWritten/1000000000" | bc -q`
+		bytesWrittenRepr+="GB"
+	elif [ "$bytesWritten" -ge "1000000" ]; then
+		bytesWrittenRepr=`echo "scale=2; $bytesWritten/1000000" | bc -q`
+		bytesWrittenRepr+="MB"
+	elif [ "$bytesWritten" -ge "1000" ]; then
+		bytesWrittenRepr=`echo "scale=2; $bytesWritten/1000" | bc -q`
+		bytesWrittenRepr+="KB"
+	else
+		bytesWrittenRepr=$bytesWritten"B"
+	fi
+	writeRate=$(($bytesWritten/($duration+1)))
+	if [ "$writeRate" -ge "1000000000" ]; then
+		writeRate=`echo "scale=2; $writeRate/1000000000" | bc -q`
+		writeRate+="GB/s"
+	elif [ "$writeRate" -ge "1000000" ]; then
+		writeRate=`echo "scale=2; $writeRate/1000000" | bc -q`
+		writeRate+="MB/s"
+	elif [ "$writeRate" -ge "1000" ]; then
+		writeRate=`echo "scale=2; $writeRate/1000" | bc -q`
+		writeRate+="KB/s"
+	else
+		writeRate=$writeRate"B/s"
+	fi
+    showBar $bytesWritten $bytesTotal $duration $bytesWrittenRepr $writeRate
+	sleep 0.5
+done
+# Clean up at end of script
+bytesWritten=$bytesTotal
+if [ "$bytesWritten" -ge "1000000000" ]; then
+		bytesWrittenRepr=`echo "scale=2; $bytesWritten/1000000000" | bc -q`
+		bytesWrittenRepr+="GB"
+	elif [ "$bytesWritten" -ge "1000000" ]; then
+		bytesWrittenRepr=`echo "scale=2; $bytesWritten/1000000" | bc -q`
+		bytesWrittenRepr+="MB"
+	elif [ "$bytesWritten" -ge "1000" ]; then
+		bytesWrittenRepr=`echo "scale=2; $bytesWritten/1000" | bc -q`
+		bytesWrittenRepr+="KB"
+	else
+		bytesWrittenRepr=$bytesWritten"B"
+fi
+showBar 1 1 $duration $bytesWrittenRepr $writeRate #write final value
+PUT 10 12                                           
+echo -e ""                                        
+NORM

@@ -39,3 +39,16 @@ command line.
 	Usage:
 		ddg 1+1 --> one-time search
 		ddg	--> interactive mode with history
+
+diskwrite
+---------
+wrapper around the dd command with progress bar
+- parted command is used to determine end of partition
+- (avoids copying unused space) 
+- /sys/class/block/ folder is used to query block device IO
+- /proc/ folder is used to check dd process status
+	Usage:
+		sudo ./diskwrite source destination
+
+(all the code for drawing the progress bar is from Ian Brown ijbrown@hotmail.com)
+
