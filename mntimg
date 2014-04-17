@@ -1,0 +1,71 @@
+#!/bin/bash
+#	Mounts/unmounts the partitions of a disk image file (*.img)
+
+if [[ $EUID -ne 0 ]]; then
+	echo "This script must be run as root"
+	exit 1
+fi
+# If user wants to unmount
+if [ "$1" == "-u" ]; then
+	if ! [ -f "$2" ]; then
+		echo "Usage: mntimg [-u] source [destination]"
+		echo "       [-u]:unmounts source:regular file; destination(optional):directory" 
+		exit 1
+	fi
+	sourceFile=${2##*/} #remove directory
+	sourceName=${sourceFile%.*} #remove extension from filename
+	for f in /mnt/*
+	do
+		if [[ $f == /mnt/$sourceName* ]]; then
+			result=`umount $f 2>&1`
+			if [ -n "$result" ]; then
+				echo "Error: $result"
+			else
+				echo "Successfully unmounted $f"
+			fi
+			rmdir $f &>/dev/null
+		fi	
+	done
+	exit 0
+fi
+# If user wants to mount
+if ! [ -f "$1" ] || [ -n "$2" ] && ! [ -d "$2" ]; then
+	echo "Usage: mntimg [-u] source [destination]"
+	echo "       [-u]:unmounts source:regular file; destination(optional):directory" 
+	exit 1
+fi
+sectorInfo=`parted -s -m $1 unit b print`
+if [ "${sectorInfo:0:5}" == "Error" ]; then
+	echo "Error: Source file does not contain a valid disk image"
+	exit 1
+fi
+partitionInfo=`echo -e "$sectorInfo" | grep '^[1-9].*;$'`
+for i in $partitionInfo
+do
+	arr=(${i//:/ })
+	sourceFile=${1##*/} #remove directory
+	sourceName=${sourceFile%.*} #remove extension from filename
+	partitionNum=${arr[0]}
+	offset=${arr[1]%?} #remove trailing 'B' character
+	fileSystem=${arr[4]}
+	if [ "$fileSystem" == ";" ]; then
+		fileSystem="unknown"
+	fi
+	if [ -d "$2" ]; then
+		destination=$2
+	else
+		destination="/mnt/$sourceName-$partitionNum-$fileSystem"
+		mkdir $destination &>/dev/null
+	fi
+	
+	result=`mount -o loop,offset=$offset $1 $destination 2>&1`
+	if [ -n "$result" ]; then
+		echo "Error: $result"
+	else
+		echo "Successfully mounted $destination"
+	fi
+	
+	if [ "$destination" == "$2" ]; then
+		break #only mount one partition if destination is specified on command line
+	fi
+done

@@ -43,6 +43,7 @@ command line.
 diskwrite
 ---------
 wrapper around the dd command with progress bar
+
 - parted command is used to determine end of partition
 - (avoids copying unused space) 
 - /sys/class/block/ folder is used to query block device IO
@@ -53,3 +54,9 @@ wrapper around the dd command with progress bar
 
 (all the code for drawing the progress bar is from Ian Brown ijbrown@hotmail.com)
 
+mntimg
+------
+automatically detects and mounts the partitions of a disk image (.img) file
+
+	Usage:
+		sudo ./mntimg [-u] source [destination]
