@@ -60,3 +60,13 @@ automatically detects and mounts the partitions of a disk image (.img) file
 
 	Usage:
 		sudo ./mntimg [-u] source [destination]
+
+monitor
+-------
+
+Monitors the cpu and memory usage of processes.
+Defaults to the top 10 processes with highest memory usage.
+An optional argument may be supplied to filter for process names
+
+	Usage:
+		./monitor [process]

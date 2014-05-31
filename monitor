@@ -1,0 +1,7 @@
+#!/bin/bash
+if [ -z "$1" ]
+then
+	watch -n 1 "ps -eo rss,vsz,%mem,%cpu,pid,command --sort -rss | head -10"
+else
+        watch -n 1 "ps -eo rss,vsz,%mem,%cpu,pid,command --sort -rss | grep $1"
+fi
